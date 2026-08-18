@@ -84,6 +84,7 @@
     .panel.lori-choices {
       top: auto; bottom: 88px; left: 418px; transform: none; min-width: 200px;
     }
+    .panel.lori-choices h2 { display: none; }
     .lori-bubble {
       position: absolute; left: 448px; top: 148px; z-index: 48;
       background: rgba(255,255,255,0.97); border: 2px solid #ce93d8;
@@ -118,7 +119,7 @@
         padding: 12px 14px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.2);
       }
-      .panel h2 { font-size: 17px; }
+      .panel h2, .panel.lori-choices h2 { display: block; font-size: 17px; }
       .panel button.opt {
         font-size: 16px;
         padding: 12px 14px;
@@ -142,11 +143,11 @@
     }
     @media (orientation: landscape) and (max-height: 560px) {
       .panel, .panel.lori-choices {
-        top: 6px; bottom: auto; left: 50%; transform: translateX(-50%);
-        min-width: 220px; max-width: min(70vw, 340px);
+        top: 6px; bottom: auto; left: 8px; right: auto; transform: none;
+        min-width: 200px; max-width: min(42vw, 280px);
         font-size: 15px; padding: 8px 12px;
       }
-      .panel h2 { font-size: 16px; }
+      .panel h2, .panel.lori-choices h2 { display: block; font-size: 16px; }
       .panel button.opt {
         font-size: 15px; padding: 10px 12px; min-height: 42px;
       }
@@ -648,7 +649,7 @@ window.onload = function () {
 
   function showLoriChoices(title, opts, fn) {
     setLoriBubble(title);
-    pTitle.textContent = "";
+    pTitle.textContent = title;
     pMsg.style.display = "none";
     pOpts.innerHTML = "";
     for (var i = 0; i < opts.length; i++) {
@@ -699,7 +700,7 @@ window.onload = function () {
   function startLoriCryChoices() {
     showPanel("לורי בוכה", [
       "לעשות שיחת וידאו עם סבא וטטוש",
-      "לעשות שיחק וידאו עם טומי"
+      "לעשות שיחת וידאו עם טומי"
     ], pickLoriCry);
   }
 
