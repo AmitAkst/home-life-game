@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>חיים בבית</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #3d6b8a; font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    }
+    #stage {
+      position: relative; width: 800px; height: 500px;
+      border-radius: 14px; overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+    }
+    #game { display: block; width: 800px; height: 500px; }
+    .actor {
+      position: absolute; pointer-events: none; z-index: 10;
+      transform-origin: bottom center;
+      filter: drop-shadow(0 5px 14px rgba(0,0,0,0.16));
+    }
+    .actor svg { display: block; overflow: visible; }
+    .actor.cry-bob { animation: cryBob 0.52s ease-in-out infinite alternate; }
+    @keyframes cryBob {
+      from { transform: translateY(0); }
+      to { transform: translateY(-4px); }
+    }
+    .hint {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff; padding: 6px 14px;
+      border-radius: 8px; font-size: 14px; z-index: 50; pointer-events: none;
+    }
+    .panel {
+      position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,255,255,0.97); border: 2px solid #94a3b8;
+      border-radius: 10px; padding: 10px 14px; min-width: 210px; max-width: 280px;
+      z-index: 50; font-size: 14px;
+    }
+    .panel.hide { display: none; }
+    .panel h2 { font-size: 15px; text-align: center; margin-bottom: 8px; }
+    .panel button.opt {
+      display: block; width: 100%; margin: 4px 0; padding: 7px 10px;
+      font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+      border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc;
+    }
+    .panel p.msg { text-align: center; color: #15803d; font-weight: bold; margin-top: 6px; }
+    .panel.lori-choices {
+      top: auto; bottom: 88px; left: 418px; transform: none; min-width: 200px;
+    }
+    .lori-bubble {
+      position: absolute; left: 448px; top: 148px; z-index: 48;
+      background: rgba(255,255,255,0.97); border: 2px solid #ce93d8;
+      border-radius: 10px; padding: 8px 14px; font-size: 15px; font-weight: 700;
+      color: #6a1b9a; text-align: center; max-width: 210px; pointer-events: none;
+    }
+    .lori-bubble.hide { display: none; }
+    #restartBtn {
+      position: absolute; bottom: 8px; right: 8px; z-index: 50;
+      padding: 5px 10px; font-size: 12px; border-radius: 6px;
+      border: 1px solid #94a3b8; background: #fff; cursor: pointer;
+    }
+    #restartBtn.hide { display: none; }
+  </style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="800" height="500"></canvas>
+  <div id="lori" class="actor" style="left:468px;top:198px;width:150px;height:220px"></div>
+  <div id="andyFloor" class="actor" style="left:248px;top:288px;width:100px;height:125px"></div>
+  <div id="mom" class="actor" style="left:70px;top:225px;width:150px;height:235px"></div>
+  <div id="andyHeld" class="actor" style="left:0;top:0;width:100px;height:125px;z-index:15;display:none"></div>
+
+  <div id="loriBubble" class="lori-bubble hide"></div>
+  <div id="panel" class="panel hide">
+    <h2 id="pTitle"></h2>
+    <div id="pOpts"></div>
+    <p id="pMsg" class="msg" style="display:none"></p>
+  </div>
+  <button id="restartBtn" type="button" class="hide">התחל מחדש</button>
+  <div id="hint" class="hint"></div>
+</div>
+
+<script>
+window.onload = function () {
+  var canvas = document.getElementById("game");
+  var g = canvas.getContext("2d");
+  var W = 800, H = 500;
+  var elLori = document.getElementById("lori");
+  var elAndyFloor = document.getElementById("andyFloor");
+  var elMom = document.getElementById("mom");
+  var elAndyHeld = document.getElementById("andyHeld");
+  var panel = document.getElementById("panel");
+  var pTitle = document.getElementById("pTitle");
+  var pOpts = document.getElementById("pOpts");
+  var pMsg = document.getElementById("pMsg");
+  var hint = document.getElementById("hint");
+  var restartBtn = document.getElementById("restartBtn");
+  var loriBubble = document.getElementById("loriBubble");
+
+  var scene = "out";
+  var andyOk = false, andyArms = false, andyOnFloor = true;
+  var loriCry = false, loriWhine = false, loriFoodMode = "";
+  var momPhone = false, momMouth = false, momFeed = false;
+  var momSit = false, momVideoCall = false;
+  var momPos = { x: 70, y: 225 };
+  var momLift = 0;
+  var momCarrying = false;
+  var momVisible = false;
+  var cryActive = false, phoneTalk = false;
+  var walkTimer = null;
+  var lastActorKey = "";
+
+  var DOOR = { x: 355, y: 255, w: 90, h: 145 };
+  var ANDY = { x: 248, y: 288 };
+  var LORI = { x: 468, y: 198 };
+  var LORI_SIT = { x: 295, y: 252 };
+  var SOFA = { x: 580, y: 235 };
+  var M0 = { x: 70, y: 225 };
+
+  var ANDY_CHOICES = ["לתת לו ציצי", "להרים את אנדי", "להתקשר לעמית להתלונן"];
+
+  function showAndyChoices() {
+    showPanel("אנדי בוכה", ANDY_CHOICES, pick);
+  }
+
+  var SOUND_URLS = {
+    babyCry: "https://commons.wikimedia.org/wiki/Special:FilePath/Crying_newborn_baby.ogg",
+    girlCry: "https://commons.wikimedia.org/wiki/Special:FilePath/Baby_long_wanting_cry.ogg"
+  };
+
+  var audioCtx = null;
+  var phoneMumbleActive = false;
+  var phoneMumbleStep = 0;
+
+  var babyCryAudio = new Audio(SOUND_URLS.babyCry);
+  babyCryAudio.loop = true;
+  babyCryAudio.volume = 0.48;
+  babyCryAudio.preload = "auto";
+
+  var girlCryAudio = new Audio(SOUND_URLS.girlCry);
+  girlCryAudio.loop = true;
+  girlCryAudio.volume = 0.5;
+  girlCryAudio.preload = "auto";
+
+  babyCryAudio.addEventListener("error", function () {
+    babyCryAudio.src = "https://commons.wikimedia.org/wiki/Special:FilePath/Babys_disappointed_crying.oga";
+    babyCryAudio.load();
+  });
+
+  function getAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  function cartoonMumbleSyllable() {
+    if (!phoneMumbleActive || !momPhone) return;
+    phoneMumbleStep += 1;
+    momMouth = phoneMumbleStep % 2 === 0;
+    lastActorKey = "";
+
+    try {
+      var ac = getAudio();
+      var t = ac.currentTime;
+      var dur = 0.09 + Math.random() * 0.06;
+      var osc = ac.createOscillator();
+      var osc2 = ac.createOscillator();
+      var gain = ac.createGain();
+      var filter = ac.createBiquadFilter();
+      var base = 340 + Math.random() * 160;
+
+      osc.type = "triangle";
+      osc2.type = "square";
+      osc.frequency.setValueAtTime(base, t);
+      osc.frequency.exponentialRampToValueAtTime(base * (1.55 + Math.random() * 0.25), t + dur * 0.28);
+      osc.frequency.exponentialRampToValueAtTime(base * 0.65, t + dur);
+      osc2.frequency.setValueAtTime(base * 1.85, t);
+      osc2.frequency.linearRampToValueAtTime(base * 2.4, t + dur * 0.4);
+
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(750 + Math.random() * 350, t);
+      filter.Q.value = 3.2;
+
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.006);
+      gain.gain.linearRampToValueAtTime(0.17, t + dur * 0.45);
+      gain.gain.linearRampToValueAtTime(0, t + dur);
+
+      osc.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(ac.destination);
+      osc.start(t);
+      osc2.start(t);
+      osc.stop(t + dur + 0.02);
+      osc2.stop(t + dur + 0.02);
+    } catch (e) {}
+
+    setTimeout(cartoonMumbleSyllable, 48 + Math.random() * 42);
+  }
+
+  function unlockAudio() {
+    getAudio();
+    [babyCryAudio, girlCryAudio].forEach(function (a) {
+      a.play().then(function () { a.pause(); a.currentTime = 0; }).catch(function () {});
+    });
+  }
+
+  function stopCry() {
+    cryActive = false;
+    babyCryAudio.pause();
+    babyCryAudio.currentTime = 0;
+    girlCryAudio.pause();
+    girlCryAudio.currentTime = 0;
+  }
+
+  function stopPhone() {
+    phoneTalk = false;
+    phoneMumbleActive = false;
+    momMouth = false;
+    lastActorKey = "";
+  }
+
+  function playCryLoop(audio) {
+    stopCry();
+    cryActive = true;
+    audio.currentTime = 0;
+    audio.play().catch(function () {});
+  }
+
+  function babyCry() { playCryLoop(babyCryAudio); }
+  function girlCry() { playCryLoop(girlCryAudio); }
+
+  function startPhoneTalk() {
+    phoneTalk = true;
+    momPhone = true;
+    phoneMumbleActive = true;
+    phoneMumbleStep = 0;
+    getAudio();
+    cartoonMumbleSyllable();
+  }
+
+  /* ─── SVG: אנדי (ג'ינג'י, עיניים חומות, שיער קצר) ─── */
+  function svgAndy(cry, happy, arms, pacifier, uid) {
+    uid = uid || "af";
+    function gid(n) { return uid + n; }
+    function gref(n) { return "url(#" + gid(n) + ")"; }
+
+    var mouth = cry
+      ? '<path d="M42 62 C42 74 58 74 58 62 Z" fill="#ffcdd2" stroke="#b07a7a" stroke-width="1.2"/>' +
+        '<path d="M34 50 Q36 58 38 50" fill="none" stroke="#81d4fa" stroke-width="2.5" stroke-linecap="round"/>' +
+        '<path d="M62 50 Q64 58 66 50" fill="none" stroke="#81d4fa" stroke-width="2.5" stroke-linecap="round"/>' +
+        '<ellipse cx="36" cy="54" rx="2.8" ry="3.8" fill="#81d4fa" opacity="0.75"/>' +
+        '<ellipse cx="64" cy="54" rx="2.8" ry="3.8" fill="#81d4fa" opacity="0.75"/>'
+      : happy
+        ? '<path d="M36 60 Q50 74 64 60" fill="none" stroke="#d84315" stroke-width="3.2" stroke-linecap="round"/>'
+        : '<path d="M40 61 Q50 67 60 61" fill="none" stroke="#e57373" stroke-width="2.2" stroke-linecap="round"/>';
+
+    var armL = arms
+      ? '<path d="M14 78 C-2 52 4 28 16 18" fill="none" stroke="' + gref("Skin") + '" stroke-width="11" stroke-linecap="round"/>' +
+        '<ellipse cx="16" cy="16" rx="8" ry="9" fill="' + gref("Skin") + '"/>'
+      : '<path d="M14 78 C6 94 10 108 14 118" fill="none" stroke="' + gref("Skin") + '" stroke-width="10" stroke-linecap="round"/>';
+    var armR = arms
+      ? '<path d="M86 78 C100 52 94 28 82 18" fill="none" stroke="' + gref("Skin") + '" stroke-width="11" stroke-linecap="round"/>' +
+        '<ellipse cx="82" cy="16" rx="8" ry="9" fill="' + gref("Skin") + '"/>'
+      : '<path d="M86 78 C94 94 90 108 86 118" fill="none" stroke="' + gref("Skin") + '" stroke-width="10" stroke-linecap="round"/>';
+
+    var pac = pacifier
+      ? '<circle cx="50" cy="63" r="11" fill="' + gref("Pac") + '"/>' +
+        '<circle cx="50" cy="63" r="5.5" fill="#fce4ec"/>' +
+        '<rect x="48" y="64" width="4" height="14" rx="2" fill="#f06292"/>'
+      : "";
+
+    return '<svg viewBox="0 0 100 125" xmlns="http://www.w3.org/2000/svg">' +
+      '<defs>' +
+      '<linearGradient id="' + gid("Skin") + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe8d0"/><stop offset="100%" stop-color="#ffcc99"/></linearGradient>' +
+      '<linearGradient id="' + gid("Hair") + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffb74d"/><stop offset="45%" stop-color="#f57c00"/><stop offset="100%" stop-color="#e65100"/></linearGradient>' +
+      '<linearGradient id="' + gid("Onesie") + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffef5"/><stop offset="100%" stop-color="#fff3c4"/></linearGradient>' +
+      '<radialGradient id="' + gid("Cheek") + '" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffab91" stop-opacity="0.65"/><stop offset="100%" stop-color="#ffab91" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="' + gid("EyeW") + '" cx="40%" cy="35%" r="60%"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#f5f5f5"/></radialGradient>' +
+      '<radialGradient id="' + gid("Iris") + '" cx="45%" cy="40%" r="55%"><stop offset="0%" stop-color="#8d6e63"/><stop offset="100%" stop-color="#4e342e"/></radialGradient>' +
+      '<linearGradient id="' + gid("Pac") + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f8bbd0"/><stop offset="100%" stop-color="#ec407a"/></linearGradient>' +
+      '</defs>' +
+      '<ellipse cx="50" cy="118" rx="32" ry="6" fill="rgba(0,0,0,0.11)"/>' +
+      armL + armR +
+      '<path d="M18 76 C50 98 82 76 82 76 L88 104 C88 112 70 118 50 118 C30 118 12 112 12 104 Z" fill="' + gref("Onesie") + '"/>' +
+      '<path d="M22 78 C50 92 78 78" fill="none" stroke="#ffe082" stroke-width="1.8" opacity="0.55"/>' +
+      '<ellipse cx="50" cy="88" rx="34" ry="28" fill="' + gref("Onesie") + '"/>' +
+      '<path d="M22 44 C22 18 50 6 78 44 C78 28 50 16 22 28 Z" fill="' + gref("Hair") + '"/>' +
+      '<path d="M24 26 C34 10 42 14 48 22" fill="none" stroke="#ff6f00" stroke-width="2.5" stroke-linecap="round" opacity="0.55"/>' +
+      '<path d="M76 26 C66 10 58 14 52 22" fill="none" stroke="#ff6f00" stroke-width="2.5" stroke-linecap="round" opacity="0.55"/>' +
+      '<path d="M18 32 C8 48 14 68 22 78 C26 58 24 42 18 32 Z" fill="' + gref("Hair") + '"/>' +
+      '<path d="M82 32 C92 48 86 68 78 78 C74 58 76 42 82 32 Z" fill="' + gref("Hair") + '"/>' +
+      '<ellipse cx="50" cy="46" rx="30" ry="32" fill="' + gref("Skin") + '"/>' +
+      '<g><ellipse cx="36" cy="44" rx="11" ry="13" fill="' + gref("EyeW") + '"/>' +
+      '<circle cx="36" cy="46" r="7" fill="' + gref("Iris") + '"/><circle cx="36" cy="46" r="3.2" fill="#212121"/>' +
+      '<circle cx="38" cy="44" r="2.2" fill="#fff" opacity="0.95"/><circle cx="34" cy="47" r="1" fill="#fff" opacity="0.5"/></g>' +
+      '<g><ellipse cx="64" cy="44" rx="11" ry="13" fill="' + gref("EyeW") + '"/>' +
+      '<circle cx="64" cy="46" r="7" fill="' + gref("Iris") + '"/><circle cx="64" cy="46" r="3.2" fill="#212121"/>' +
+      '<circle cx="66" cy="44" r="2.2" fill="#fff" opacity="0.95"/><circle cx="62" cy="47" r="1" fill="#fff" opacity="0.5"/></g>' +
+      '<ellipse cx="28" cy="54" rx="9" ry="5.5" fill="' + gref("Cheek") + '"/>' +
+      '<ellipse cx="72" cy="54" rx="9" ry="5.5" fill="' + gref("Cheek") + '"/>' +
+      '<path d="M32 38 Q36 34 40 38" fill="none" stroke="#bf360c" stroke-width="1.8" stroke-linecap="round"/>' +
+      '<path d="M60 38 Q64 34 68 38" fill="none" stroke="#bf360c" stroke-width="1.8" stroke-linecap="round"/>' +
+      mouth + pac +
+      '</svg>';
+  }
+
+  /* ─── SVG: לורי (שיער בlonde ארוך, עיניים כחולות) ─── */
+  function svgLori(cry, whine) {
+    var mouth = cry
+      ? '<path d="M58 78 C58 92 72 92 72 78 Z" fill="#ffcdd2" stroke="#9e7a7a" stroke-width="1.2"/>' +
+        '<ellipse cx="52" cy="66" rx="3.5" ry="4.5" fill="#81d4fa" opacity="0.8"/>' +
+        '<ellipse cx="78" cy="66" rx="3.5" ry="4.5" fill="#81d4fa" opacity="0.8"/>' +
+        '<path d="M46 62 L48 70 M74 62 L76 70" stroke="#81d4fa" stroke-width="2" stroke-linecap="round" opacity="0.6"/>'
+      : whine
+        ? '<path d="M52 78 Q65 73 78 78" fill="none" stroke="#e57373" stroke-width="2.8" stroke-linecap="round"/>'
+        : '<path d="M54 76 Q65 90 76 76" fill="none" stroke="#e53935" stroke-width="3.2" stroke-linecap="round"/>';
+    var brow = cry
+      ? '<path d="M44 54 Q54 48 64 54" fill="none" stroke="#bcaaa4" stroke-width="2.2" stroke-linecap="round"/>'
+      : whine
+        ? '<path d="M42 52 Q54 58 66 52" fill="none" stroke="#a1887f" stroke-width="2.2" stroke-linecap="round"/>'
+        : '';
+
+    return '<svg viewBox="0 0 150 220" xmlns="http://www.w3.org/2000/svg">' +
+      '<defs>' +
+      '<linearGradient id="lSkin" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe8d0"/><stop offset="100%" stop-color="#ffcc99"/></linearGradient>' +
+      '<linearGradient id="lHair" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff9c4"/><stop offset="40%" stop-color="#ffee58"/><stop offset="100%" stop-color="#fbc02d"/></linearGradient>' +
+      '<linearGradient id="lDress" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e1bee7"/><stop offset="100%" stop-color="#9c27b0"/></linearGradient>' +
+      '<linearGradient id="lDressFold" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ce93d8" stop-opacity="0"/><stop offset="50%" stop-color="#ce93d8" stop-opacity="0.45"/><stop offset="100%" stop-color="#ce93d8" stop-opacity="0"/></linearGradient>' +
+      '<radialGradient id="lCheek" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffab91" stop-opacity="0.6"/><stop offset="100%" stop-color="#ffab91" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="lIris" cx="45%" cy="38%" r="55%"><stop offset="0%" stop-color="#64b5f6"/><stop offset="100%" stop-color="#1565c0"/></radialGradient>' +
+      '</defs>' +
+      '<ellipse cx="75" cy="208" rx="36" ry="8" fill="rgba(0,0,0,0.1)"/>' +
+      '<path d="M40 122 C75 148 110 122 110 122 L118 188 C118 200 75 212 32 188 Z" fill="url(#lDress)"/>' +
+      '<path d="M55 130 L55 185" stroke="url(#lDressFold)" stroke-width="8"/>' +
+      '<path d="M95 130 L95 178" stroke="url(#lDressFold)" stroke-width="6"/>' +
+      '<path d="M36 120 L114 120 L108 134 L42 134 Z" fill="#f3e5f5"/>' +
+      '<circle cx="75" cy="42" r="3" fill="#ce93d8"/>' +
+      '<path d="M26 28 C10 -8 40 -18 75 -16 C110 -14 140 0 124 28 C118 8 75 -2 26 28 Z" fill="url(#lHair)"/>' +
+      '<path d="M22 36 C14 70 20 108 28 130" fill="none" stroke="url(#lHair)" stroke-width="12" stroke-linecap="round"/>' +
+      '<path d="M128 36 C136 70 130 108 122 130" fill="none" stroke="url(#lHair)" stroke-width="12" stroke-linecap="round"/>' +
+      '<path d="M30 52 C24 80 26 100 32 118" fill="none" stroke="#fdd835" stroke-width="3" opacity="0.35"/>' +
+      '<path d="M120 52 C126 80 124 100 118 118" fill="none" stroke="#fdd835" stroke-width="3" opacity="0.35"/>' +
+      '<ellipse cx="75" cy="72" rx="36" ry="38" fill="url(#lSkin)"/>' +
+      brow +
+      '<g><ellipse cx="54" cy="68" rx="13" ry="15" fill="#fff"/>' +
+      '<circle cx="54" cy="70" r="8.5" fill="url(#lIris)"/><circle cx="54" cy="70" r="4.5" fill="#0d47a1"/>' +
+      '<circle cx="56" cy="68" r="2.5" fill="#fff"/><path d="M46 60 Q54 56 62 60" fill="none" stroke="#8d6e63" stroke-width="1.5" stroke-linecap="round"/></g>' +
+      '<g><ellipse cx="96" cy="68" rx="13" ry="15" fill="#fff"/>' +
+      '<circle cx="96" cy="70" r="8.5" fill="url(#lIris)"/><circle cx="96" cy="70" r="4.5" fill="#0d47a1"/>' +
+      '<circle cx="98" cy="68" r="2.5" fill="#fff"/><path d="M88 60 Q96 56 104 60" fill="none" stroke="#8d6e63" stroke-width="1.5" stroke-linecap="round"/></g>' +
+      '<ellipse cx="42" cy="82" rx="10" ry="6" fill="url(#lCheek)"/>' +
+      '<ellipse cx="108" cy="82" rx="10" ry="6" fill="url(#lCheek)"/>' +
+      mouth +
+      '</svg>';
+  }
+
+  /* ─── SVG: אמא (שיער חום, חולצה כחולה) ─── */
+  function svgMom(pose, mouthOpen) {
+    var arms, phoneExtra = "";
+    if (pose === "carry" || pose === "feed") {
+      arms = '<path d="M28 128 C6 96 18 58 34 48" fill="none" stroke="url(#mSkin)" stroke-width="13" stroke-linecap="round"/>' +
+             '<path d="M122 128 C144 96 132 58 116 48" fill="none" stroke="url(#mSkin)" stroke-width="13" stroke-linecap="round"/>' +
+             '<ellipse cx="75" cy="142" rx="42" ry="20" fill="rgba(92,107,192,0.22)"/>';
+    } else if (pose === "video") {
+      arms = '<path d="M28 128 C14 100 22 78 36 62" fill="none" stroke="url(#mSkin)" stroke-width="12" stroke-linecap="round"/>' +
+             '<path d="M122 128 C108 98 98 72 88 48" fill="none" stroke="url(#mSkin)" stroke-width="12" stroke-linecap="round"/>';
+      phoneExtra = '<rect x="78" y="18" width="28" height="44" rx="4" fill="#263238"/>' +
+        '<rect x="80" y="22" width="24" height="34" rx="2" fill="#81d4fa"/>' +
+        '<circle cx="92" cy="36" r="6" fill="#fff" opacity="0.85"/>' +
+        '<circle cx="92" cy="36" r="3" fill="#5c6bc0"/>';
+    } else if (pose === "phone") {
+      arms = '<path d="M122 128 C152 88 134 42 118 32" fill="none" stroke="url(#mSkin)" stroke-width="13" stroke-linecap="round"/>' +
+             '<path d="M28 128 C20 100 24 82 30 72" fill="none" stroke="url(#mSkin)" stroke-width="11" stroke-linecap="round"/>';
+      phoneExtra = '<rect x="128" y="24" width="18" height="32" rx="5" fill="#263238"/>' +
+        '<rect x="130" y="28" width="14" height="22" rx="2" fill="#546e7a"/>' +
+        '<circle cx="137" cy="52" r="2" fill="#78909c"/>' +
+        '<path d="M108 68 C118 52 128 40 136 32" fill="none" stroke="url(#mSkin)" stroke-width="8" stroke-linecap="round"/>';
+    } else {
+      arms = '<path d="M28 128 C14 104 20 84 26 74" fill="none" stroke="url(#mSkin)" stroke-width="12" stroke-linecap="round"/>' +
+             '<path d="M122 128 C136 104 130 84 124 74" fill="none" stroke="url(#mSkin)" stroke-width="12" stroke-linecap="round"/>';
+    }
+
+    var mouth = pose === "feed"
+      ? '<path d="M62 82 L88 82" stroke="#757575" stroke-width="2.5" stroke-linecap="round"/>'
+      : mouthOpen
+        ? '<ellipse cx="75" cy="84" rx="8" ry="9" fill="#ef5350"/><ellipse cx="75" cy="86" rx="5" ry="4" fill="#ffcdd2"/>'
+        : '<path d="M64 82 Q75 92 86 82" fill="none" stroke="#ef9a9a" stroke-width="2.8" stroke-linecap="round"/>';
+
+    return '<svg viewBox="0 0 150 235" xmlns="http://www.w3.org/2000/svg">' +
+      '<defs>' +
+      '<linearGradient id="mSkin" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe8d0"/><stop offset="100%" stop-color="#ffcc99"/></linearGradient>' +
+      '<linearGradient id="mHair" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a1887f"/><stop offset="50%" stop-color="#6d4c41"/><stop offset="100%" stop-color="#4e342e"/></linearGradient>' +
+      '<linearGradient id="mShirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c5cae9"/><stop offset="100%" stop-color="#3949ab"/></linearGradient>' +
+      '<linearGradient id="mPants" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5d4037"/><stop offset="100%" stop-color="#3e2723"/></linearGradient>' +
+      '<radialGradient id="mCheek" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffab91" stop-opacity="0.55"/><stop offset="100%" stop-color="#ffab91" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="mIris" cx="45%" cy="40%" r="55%"><stop offset="0%" stop-color="#6d4c41"/><stop offset="100%" stop-color="#3e2723"/></radialGradient>' +
+      '</defs>' +
+      '<ellipse cx="75" cy="222" rx="34" ry="7" fill="rgba(0,0,0,0.11)"/>' +
+      (pose === "video" || pose === "sit"
+        ? '<path d="M38 158 L38 200" stroke="url(#mPants)" stroke-width="14" stroke-linecap="round"/>' +
+          '<path d="M112 158 L112 200" stroke="url(#mPants)" stroke-width="14" stroke-linecap="round"/>'
+        : '<path d="M48 168 L42 218" stroke="url(#mPants)" stroke-width="14" stroke-linecap="round"/>' +
+          '<path d="M102 168 L108 218" stroke="url(#mPants)" stroke-width="14" stroke-linecap="round"/>') +
+      '<path d="M24 112 C75 138 126 112 126 112 L134 168 C134 182 75 198 16 168 Z" fill="url(#mShirt)"/>' +
+      '<path d="M22 110 L128 110 L122 126 L28 126 Z" fill="#e8eaf6"/>' +
+      '<path d="M60 118 L60 162" stroke="rgba(255,255,255,0.18)" stroke-width="4"/>' +
+      arms + phoneExtra +
+      '<path d="M20 48 C8 8 38 -12 75 -14 C112 -12 142 8 130 48 C124 22 75 8 20 48 Z" fill="url(#mHair)"/>' +
+      '<path d="M16 42 C4 68 12 98 24 118" fill="none" stroke="url(#mHair)" stroke-width="11" stroke-linecap="round"/>' +
+      '<path d="M134 42 C146 68 138 98 126 118" fill="none" stroke="url(#mHair)" stroke-width="11" stroke-linecap="round"/>' +
+      '<ellipse cx="75" cy="62" rx="34" ry="36" fill="url(#mSkin)"/>' +
+      '<g><ellipse cx="54" cy="58" rx="13" ry="15" fill="#fff"/>' +
+      '<circle cx="54" cy="60" r="8.5" fill="url(#mIris)"/><circle cx="54" cy="60" r="4.2" fill="#212121"/>' +
+      '<circle cx="56" cy="58" r="2.5" fill="#fff"/></g>' +
+      '<g><ellipse cx="96" cy="58" rx="13" ry="15" fill="#fff"/>' +
+      '<circle cx="96" cy="60" r="8.5" fill="url(#mIris)"/><circle cx="96" cy="60" r="4.2" fill="#212121"/>' +
+      '<circle cx="98" cy="58" r="2.5" fill="#fff"/></g>' +
+      '<ellipse cx="42" cy="72" rx="10" ry="6" fill="url(#mCheek)"/>' +
+      '<ellipse cx="108" cy="72" rx="10" ry="6" fill="url(#mCheek)"/>' +
+      '<path d="M48 48 Q54 44 60 48" fill="none" stroke="#5d4037" stroke-width="2" stroke-linecap="round"/>' +
+      '<path d="M90 48 Q96 44 102 48" fill="none" stroke="#5d4037" stroke-width="2" stroke-linecap="round"/>' +
+      mouth +
+      '</svg>';
+  }
+
+  function actorKey() {
+    return [scene, andyOk, andyArms, andyOnFloor, loriCry, loriWhine, momPhone, momFeed, momCarrying, momVisible, momMouth, momLift, momSit, momVideoCall].join("|");
+  }
+
+  function refreshActors() {
+    var liftY = momLift ? "translateY(" + momLift + "px)" : "";
+    var showHeld = scene === "in" && (momCarrying || momFeed);
+
+    elMom.style.left = momPos.x + "px";
+    elMom.style.top = momPos.y + "px";
+    elMom.style.transform = liftY;
+    elAndyFloor.style.left = ANDY.x + "px";
+    elAndyFloor.style.top = ANDY.y + "px";
+
+    elLori.className = "actor" + (loriCry ? " cry-bob" : "");
+    elAndyFloor.className = "actor" + (!andyOk && andyOnFloor ? " cry-bob" : "");
+    elLori.style.display = scene === "in" ? "block" : "none";
+    elAndyFloor.style.display = (scene === "in" && andyOnFloor) ? "block" : "none";
+    elMom.style.display = (scene === "in" && momVisible) ? "block" : "none";
+
+    elAndyHeld.style.display = showHeld ? "block" : "none";
+    if (showHeld) {
+      elAndyHeld.style.left = (momPos.x + 48) + "px";
+      elAndyHeld.style.top = (momPos.y - 82) + "px";
+      elAndyHeld.style.transform = liftY;
+    }
+
+    var key = actorKey();
+    if (key === lastActorKey) return;
+    lastActorKey = key;
+
+    elLori.innerHTML = svgLori(loriCry, loriWhine);
+    elAndyFloor.innerHTML = svgAndy(!andyOk && andyOnFloor, andyOk, andyArms, false, "af");
+
+    if (scene === "in" && momVisible) {
+      var pose = momVideoCall ? "video" : momPhone ? "phone" : momFeed ? "feed" : momCarrying ? "carry" : "stand";
+      elMom.innerHTML = svgMom(pose, momMouth);
+    }
+
+    if (showHeld) {
+      elAndyHeld.innerHTML = svgAndy(false, andyOk, andyArms, momFeed, "ah");
+    }
+  }
+
+  function drawOut() {
+    var sky = g.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#6ec6ff"); sky.addColorStop(0.55, "#b3e5fc"); sky.addColorStop(1, "#e1f5fe");
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    g.fillStyle = "rgba(255,255,255,0.85)"; g.beginPath(); g.arc(640, 85, 38, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#689f38"; g.fillRect(0, H - 72, W, 72);
+    g.fillStyle = "#33691e"; g.beginPath(); g.ellipse(120, H - 38, 55, 28, 0, 0, Math.PI * 2); g.ellipse(680, H - 42, 62, 32, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#fff8e1"; g.fillRect(200, 195, 400, 225);
+    var roof = g.createLinearGradient(180, 125, 620, 125);
+    roof.addColorStop(0, "#6d4c41"); roof.addColorStop(1, "#5d4037");
+    g.fillStyle = roof; g.beginPath(); g.moveTo(175, 210); g.lineTo(400, 95); g.lineTo(625, 210); g.closePath(); g.fill();
+    g.fillStyle = "#5d4037"; g.fillRect(DOOR.x, DOOR.y, DOOR.w, DOOR.h);
+    g.strokeStyle = "#3e2723"; g.lineWidth = 3; g.strokeRect(DOOR.x, DOOR.y, DOOR.w, DOOR.h);
+    g.fillStyle = "#ffd54f"; g.beginPath(); g.arc(DOOR.x + 18, DOOR.y + 74, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#fff"; g.font = "700 22px Segoe UI"; g.textAlign = "center";
+    g.fillText("לחץ על הדלת", 400, 188);
+  }
+
+  function drawIn() {
+    var wall = g.createLinearGradient(0, 0, 0, H);
+    wall.addColorStop(0, "#fffaf5"); wall.addColorStop(1, "#f5e6d3");
+    g.fillStyle = wall; g.fillRect(0, 0, W, H - 75);
+    g.fillStyle = "rgba(255,213,79,0.12)"; g.beginPath(); g.moveTo(520, 0); g.lineTo(780, 0); g.lineTo(780, H); g.lineTo(620, H); g.closePath(); g.fill();
+    g.fillStyle = "#cfd8dc"; g.fillRect(540, 40, 120, 90); g.fillStyle = "#90caf9"; g.fillRect(548, 48, 104, 74);
+    g.strokeStyle = "#b0bec5"; g.lineWidth = 4; g.strokeRect(540, 40, 120, 90);
+    g.fillStyle = "#d7ccc8"; g.fillRect(0, H - 75, W, 75);
+    var rug = g.createRadialGradient(400, H - 20, 10, 400, H - 20, 160);
+    rug.addColorStop(0, "#ffccbc"); rug.addColorStop(1, "#ffab91");
+    g.fillStyle = rug; g.beginPath(); g.ellipse(400, H - 22, 155, 38, 0, 0, Math.PI * 2); g.fill();
+    var sofaG = g.createLinearGradient(560, 285, 740, 375);
+    sofaG.addColorStop(0, "#7986cb"); sofaG.addColorStop(1, "#3949ab");
+    g.fillStyle = sofaG; g.beginPath();
+    g.moveTo(565, 295); g.lineTo(730, 295); g.quadraticCurveTo(745, 310, 745, 330);
+    g.lineTo(738, 375); g.lineTo(555, 375); g.quadraticCurveTo(545, 360, 555, 340); g.closePath(); g.fill();
+    g.fillStyle = "#9fa8da"; g.fillRect(582, 312, 130, 48);
+    g.fillStyle = "#a1887f"; g.fillRect(105, 318, 105, 58);
+    g.fillStyle = "rgba(255,213,79,0.18)"; g.beginPath(); g.arc(660, 75, 70, 0, Math.PI * 2); g.fill();
+  }
+
+  function paint() {
+    g.clearRect(0, 0, W, H);
+    if (scene === "out") drawOut(); else drawIn();
+    refreshActors();
+    requestAnimationFrame(paint);
+  }
+
+  function setMomPos(x, y) { momPos.x = x; momPos.y = y; lastActorKey = ""; }
+
+  function setLoriBubble(t) {
+    loriBubble.textContent = t;
+    loriBubble.className = t ? "lori-bubble" : "lori-bubble hide";
+  }
+
+  function hidePanel() {
+    panel.className = "panel hide";
+    pOpts.innerHTML = "";
+    pMsg.style.display = "none";
+  }
+
+  function hideLoriScene() {
+    setLoriBubble("");
+    hidePanel();
+  }
+
+  function showLoriChoices(title, opts, fn) {
+    setLoriBubble(title);
+    pTitle.textContent = "";
+    pMsg.style.display = "none";
+    pOpts.innerHTML = "";
+    for (var i = 0; i < opts.length; i++) {
+      (function (t) {
+        var b = document.createElement("button");
+        b.className = "opt"; b.type = "button"; b.textContent = t;
+        b.onclick = function () { fn(t); };
+        pOpts.appendChild(b);
+      })(opts[i]);
+    }
+    panel.className = "panel lori-choices";
+  }
+
+  function loriSaysNo(then) {
+    setLoriBubble("לא");
+    panel.className = "panel lori-choices hide";
+    setTimeout(then, 1400);
+  }
+
+  function showLoriHungryOptions() {
+    showLoriChoices("אמא אני רעבה", ["רוצה חביתה?", "רוצה שניצל?", "מה את רוצה?"], pickLoriFood);
+  }
+
+  function showLoriSuggestOptions() {
+    showLoriChoices("תציעי לי", ["רוצה חביתה?", "רוצה שניצל?"], pickLoriFood);
+  }
+
+  function pickLoriFood(choice) {
+    pOpts.innerHTML = "";
+    if (choice === "מה את רוצה?") {
+      loriFoodMode = "suggest";
+      showLoriSuggestOptions();
+    } else if (choice === "רוצה חביתה?" || choice === "רוצה שניצל?") {
+      loriSaysNo(function () {
+        if (loriFoodMode === "suggest") showLoriSuggestOptions();
+        else showLoriHungryOptions();
+      });
+    }
+  }
+
+  function startLoriHungry() {
+    loriWhine = true;
+    loriFoodMode = "hungry";
+    lastActorKey = "";
+    showLoriHungryOptions();
+  }
+
+  function startLoriCryChoices() {
+    showPanel("לורי בוכה", [
+      "לעשות שיחת וידאו עם סבא וטטוש",
+      "לעשות שיחק וידאו עם טומי"
+    ], pickLoriCry);
+  }
+
+  function pickLoriCry(choice) {
+    hidePanel();
+    stopPhone();
+    momPhone = false;
+    walkTo(LORI_SIT.x, LORI_SIT.y, 3.5, function () {
+      momSit = true;
+      momVideoCall = true;
+      momCarrying = true;
+      andyOnFloor = false;
+      lastActorKey = "";
+      setTimeout(function () {
+        stopCry();
+        loriCry = false;
+        lastActorKey = "";
+        showMsg("לורי הפסיקה לבכות");
+        setTimeout(function () {
+          hidePanel();
+          momVideoCall = false;
+          momSit = false;
+          lastActorKey = "";
+          setTimeout(startLoriHungry, 400);
+        }, 2000);
+      }, 2000);
+    });
+  }
+
+  function say(t) { hint.textContent = t; hint.style.display = t ? "block" : "none"; }
+  function showPanel(title, opts, fn) {
+    pTitle.textContent = title; pMsg.style.display = "none"; pOpts.innerHTML = "";
+    for (var i = 0; i < opts.length; i++) {
+      (function (t) {
+        var b = document.createElement("button");
+        b.className = "opt"; b.type = "button"; b.textContent = t;
+        b.onclick = function () { fn(t); };
+        pOpts.appendChild(b);
+      })(opts[i]);
+    }
+    panel.className = "panel";
+  }
+  function showMsg(t) {
+    pOpts.innerHTML = ""; pTitle.textContent = "";
+    pMsg.textContent = t; pMsg.style.display = "block";
+    panel.className = "panel";
+  }
+
+  function walkTo(tx, ty, spd, done) {
+    if (walkTimer) clearInterval(walkTimer);
+    var fx = momPos.x, fy = momPos.y;
+    var dx = tx - fx, dy = ty - fy;
+    var steps = Math.max(1, Math.round(Math.sqrt(dx * dx + dy * dy) / spd));
+    var n = 0;
+    walkTimer = setInterval(function () {
+      n++;
+      setMomPos(fx + dx * n / steps, fy + dy * n / steps);
+      if (n >= steps) { clearInterval(walkTimer); walkTimer = null; setMomPos(tx, ty); done(); }
+    }, 30);
+  }
+
+  function liftAnim(done) {
+    momCarrying = true;
+    andyOnFloor = false;
+    lastActorKey = "";
+    var step = 0;
+    var id = setInterval(function () {
+      step++;
+      momLift = -step * 1.2;
+      lastActorKey = "";
+      if (step >= 8) {
+        clearInterval(id);
+        momLift = 0;
+        lastActorKey = "";
+        done();
+      }
+    }, 50);
+  }
+
+  function andyDone(after) {
+    showMsg("אנדי הפסיק לבכות");
+    setTimeout(function () {
+      hidePanel();
+      if (after) setTimeout(after, 2000);
+    }, 2000);
+  }
+
+  function pick(choice) {
+    if (choice === "להתקשר לעמית להתלונן") {
+      momPhone = true; momFeed = false; momCarrying = false;
+      momSit = false; momVideoCall = false;
+      setMomPos(620, 235); lastActorKey = "";
+      if (!cryActive) babyCry();
+      stopPhone();
+      startPhoneTalk();
+      showAndyChoices();
+      return;
+    }
+
+    hidePanel();
+    hideLoriScene();
+    stopPhone();
+    momPhone = false;
+    momSit = false;
+    momVideoCall = false;
+
+    if (choice === "לתת לו ציצי") {
+      momCarrying = false; momFeed = false;
+      walkTo(ANDY.x - 30, ANDY.y - 30, 4, function () {
+        liftAnim(function () {
+          walkTo(SOFA.x, SOFA.y, 3.5, function () {
+            momFeed = true; momCarrying = true; andyOnFloor = false;
+            andyOk = true; stopCry(); lastActorKey = "";
+            setTimeout(function () { andyDone(startLoriHungry); }, 1200);
+          });
+        });
+      });
+    } else if (choice === "להרים את אנדי") {
+      momFeed = false;
+      walkTo(ANDY.x - 30, ANDY.y - 30, 4, function () {
+        liftAnim(function () {
+          stopCry(); andyOk = true; andyArms = true;
+          momCarrying = true; andyOnFloor = false; lastActorKey = "";
+          andyDone(function () {
+            momVisible = true; momCarrying = true; andyOnFloor = false;
+            momFeed = false; loriCry = true; lastActorKey = "";
+            girlCry();
+            startLoriCryChoices();
+          });
+        });
+      });
+    }
+  }
+
+  function startDilemma() {
+    stopPhone(); momPhone = false; momFeed = false; momCarrying = false;
+    momSit = false; momVideoCall = false;
+    setMomPos(M0.x, M0.y); momVisible = true;
+    andyOk = false; andyArms = false; andyOnFloor = true; loriCry = false; loriWhine = false; loriFoodMode = "";
+    lastActorKey = ""; babyCry();
+    showAndyChoices();
+  }
+
+  function resetAll() {
+    stopCry(); stopPhone(); if (walkTimer) clearInterval(walkTimer);
+    scene = "out"; momVisible = false; momCarrying = false; momFeed = false;
+    momSit = false; momVideoCall = false;
+    andyOk = false; andyArms = false; andyOnFloor = true; loriCry = false; loriWhine = false; loriFoodMode = ""; momPhone = false;
+    momLift = 0; lastActorKey = ""; setMomPos(M0.x, M0.y);
+    hidePanel(); setLoriBubble(""); restartBtn.className = "hide";
+    say("לחץ על דלת הבית כדי להיכנס");
+  }
+
+  canvas.onclick = function (ev) {
+    if (scene !== "out") return;
+    unlockAudio();
+    var r = canvas.getBoundingClientRect();
+    var x = (ev.clientX - r.left) * (W / r.width);
+    var y = (ev.clientY - r.top) * (H / r.height);
+    if (x >= DOOR.x && x <= DOOR.x + DOOR.w && y >= DOOR.y && y <= DOOR.y + DOOR.h) {
+      scene = "in"; say(""); restartBtn.className = "";
+      momVisible = true; lastActorKey = "";
+      setTimeout(startDilemma, 1000);
+    }
+  };
+  restartBtn.onclick = resetAll;
+
+  say("לחץ על דלת הבית כדי להיכנס");
+  paint();
+};
+</script>
+</body>
+</html>
