@@ -84,7 +84,11 @@
     .panel.lori-choices {
       top: auto; bottom: 88px; left: 418px; transform: none; min-width: 200px;
     }
-    .panel.lori-choices h2 { display: none; }
+    .panel.lori-choices h2 {
+      display: block;
+      color: #6a1b9a;
+      font-size: 16px;
+    }
     .lori-bubble {
       position: absolute; left: 448px; top: 148px; z-index: 48;
       background: rgba(255,255,255,0.97); border: 2px solid #ce93d8;
@@ -106,7 +110,7 @@
       margin-top: 8px;
       opacity: 0.85;
     }
-    @media (orientation: portrait) and (max-width: 900px) {
+    @media (orientation: portrait) and (max-width: 1100px) {
       .panel, .panel.lori-choices {
         position: relative;
         top: auto; bottom: auto; left: auto;
@@ -119,7 +123,7 @@
         padding: 12px 14px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.2);
       }
-      .panel h2, .panel.lori-choices h2 { display: block; font-size: 17px; }
+      .panel h2, .panel.lori-choices h2 { display: block; font-size: 18px; }
       .panel button.opt {
         font-size: 16px;
         padding: 12px 14px;
@@ -141,17 +145,24 @@
       }
       #rotateHint { display: block; }
     }
-    @media (orientation: landscape) and (max-height: 560px) {
+    @media (orientation: landscape) and (max-height: 900px) {
       .panel, .panel.lori-choices {
         top: 6px; bottom: auto; left: 8px; right: auto; transform: none;
-        min-width: 200px; max-width: min(42vw, 280px);
+        min-width: 210px; max-width: min(38vw, 300px);
         font-size: 15px; padding: 8px 12px;
       }
-      .panel h2, .panel.lori-choices h2 { display: block; font-size: 16px; }
+      .panel h2, .panel.lori-choices h2 { display: block; font-size: 17px; }
       .panel button.opt {
         font-size: 15px; padding: 10px 12px; min-height: 42px;
       }
     }
+    #app.compact.landscape .panel,
+    #app.compact.landscape .panel.lori-choices {
+      top: 6px; bottom: auto; left: 8px; right: auto; transform: none;
+      min-width: 210px; max-width: min(38vw, 300px);
+    }
+    #app.compact.landscape .panel h2,
+    #app.compact.landscape .panel.lori-choices h2 { display: block; }
   </style>
 </head>
 <body>
@@ -198,7 +209,7 @@ window.onload = function () {
   function fitGame() {
     var pad = 12;
     var portrait = window.innerHeight > window.innerWidth;
-    var extra = (portrait && window.innerWidth <= 900) ? 210 : 0;
+    var extra = (portrait && window.innerWidth <= 1100) ? 220 : 0;
     var vw = window.innerWidth - pad * 2;
     var vh = window.innerHeight - pad * 2 - extra;
     var scale = Math.min(vw / W, vh / H, 1);
@@ -206,6 +217,11 @@ window.onload = function () {
     fitEl.style.width = (W * scale) + "px";
     fitEl.style.height = (H * scale) + "px";
     stageEl.style.transform = "scale(" + scale + ")";
+    var app = document.getElementById("app");
+    app.className = "";
+    if (window.innerHeight < 900 || window.innerWidth < 1100) {
+      app.className = "compact " + (portrait ? "portrait" : "landscape");
+    }
   }
   window.addEventListener("resize", fitGame);
   window.addEventListener("orientationchange", function () { setTimeout(fitGame, 200); });
@@ -700,7 +716,7 @@ window.onload = function () {
   function startLoriCryChoices() {
     showPanel("לורי בוכה", [
       "לעשות שיחת וידאו עם סבא וטטוש",
-      "לעשות שיחת וידאו עם טומי"
+      "לעשות שיחת וידאו לטומי"
     ], pickLoriCry);
   }
 
