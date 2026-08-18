@@ -2,18 +2,50 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>חיים בבית</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      -webkit-text-size-adjust: 100%;
+    }
     body {
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      background: #3d6b8a; font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: #3d6b8a;
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      touch-action: manipulation;
+    }
+    #app {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 100%;
+    }
+    #fit {
+      position: relative;
+      width: 800px;
+      height: 500px;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+      flex-shrink: 0;
     }
     #stage {
-      position: relative; width: 800px; height: 500px;
-      border-radius: 14px; overflow: hidden;
-      box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+      position: absolute;
+      top: 0; left: 0;
+      width: 800px;
+      height: 500px;
+      transform-origin: top left;
     }
     #game { display: block; width: 800px; height: 500px; }
     .actor {
@@ -31,12 +63,13 @@
       position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.75); color: #fff; padding: 6px 14px;
       border-radius: 8px; font-size: 14px; z-index: 50; pointer-events: none;
+      white-space: nowrap;
     }
     .panel {
       position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
       background: rgba(255,255,255,0.97); border: 2px solid #94a3b8;
       border-radius: 10px; padding: 10px 14px; min-width: 210px; max-width: 280px;
-      z-index: 50; font-size: 14px;
+      z-index: 60; font-size: 14px;
     }
     .panel.hide { display: none; }
     .panel h2 { font-size: 15px; text-align: center; margin-bottom: 8px; }
@@ -44,7 +77,9 @@
       display: block; width: 100%; margin: 4px 0; padding: 7px 10px;
       font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
       border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc;
+      -webkit-tap-highlight-color: transparent;
     }
+    .panel button.opt:active { background: #e2e8f0; }
     .panel p.msg { text-align: center; color: #15803d; font-weight: bold; margin-top: 6px; }
     .panel.lori-choices {
       top: auto; bottom: 88px; left: 418px; transform: none; min-width: 200px;
@@ -62,24 +97,82 @@
       border: 1px solid #94a3b8; background: #fff; cursor: pointer;
     }
     #restartBtn.hide { display: none; }
+    #rotateHint {
+      display: none;
+      color: #fff;
+      font-size: 13px;
+      text-align: center;
+      margin-top: 8px;
+      opacity: 0.85;
+    }
+    @media (orientation: portrait) and (max-width: 900px) {
+      .panel, .panel.lori-choices {
+        position: relative;
+        top: auto; bottom: auto; left: auto;
+        transform: none;
+        width: min(92vw, 400px);
+        max-width: none;
+        min-width: 0;
+        margin-top: 10px;
+        font-size: 16px;
+        padding: 12px 14px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      }
+      .panel h2 { font-size: 17px; }
+      .panel button.opt {
+        font-size: 16px;
+        padding: 12px 14px;
+        min-height: 48px;
+        margin: 6px 0;
+        border-radius: 10px;
+      }
+      .hint {
+        font-size: 13px;
+        padding: 8px 12px;
+        white-space: normal;
+        text-align: center;
+        max-width: 90%;
+      }
+      #restartBtn {
+        padding: 8px 12px;
+        font-size: 14px;
+        min-height: 40px;
+      }
+      #rotateHint { display: block; }
+    }
+    @media (orientation: landscape) and (max-height: 560px) {
+      .panel, .panel.lori-choices {
+        top: 6px; bottom: auto; left: 50%; transform: translateX(-50%);
+        min-width: 220px; max-width: min(70vw, 340px);
+        font-size: 15px; padding: 8px 12px;
+      }
+      .panel h2 { font-size: 16px; }
+      .panel button.opt {
+        font-size: 15px; padding: 10px 12px; min-height: 42px;
+      }
+    }
   </style>
 </head>
 <body>
-<div id="stage">
-  <canvas id="game" width="800" height="500"></canvas>
-  <div id="lori" class="actor" style="left:468px;top:198px;width:150px;height:220px"></div>
-  <div id="andyFloor" class="actor" style="left:248px;top:288px;width:100px;height:125px"></div>
-  <div id="mom" class="actor" style="left:70px;top:225px;width:150px;height:235px"></div>
-  <div id="andyHeld" class="actor" style="left:0;top:0;width:100px;height:125px;z-index:15;display:none"></div>
-
-  <div id="loriBubble" class="lori-bubble hide"></div>
+<div id="app">
+  <div id="fit">
+    <div id="stage">
+      <canvas id="game" width="800" height="500"></canvas>
+      <div id="lori" class="actor" style="left:468px;top:198px;width:150px;height:220px"></div>
+      <div id="andyFloor" class="actor" style="left:248px;top:288px;width:100px;height:125px"></div>
+      <div id="mom" class="actor" style="left:70px;top:225px;width:150px;height:235px"></div>
+      <div id="andyHeld" class="actor" style="left:0;top:0;width:100px;height:125px;z-index:15;display:none"></div>
+      <div id="loriBubble" class="lori-bubble hide"></div>
+    </div>
+    <button id="restartBtn" type="button" class="hide">התחל מחדש</button>
+    <div id="hint" class="hint"></div>
+  </div>
   <div id="panel" class="panel hide">
     <h2 id="pTitle"></h2>
     <div id="pOpts"></div>
     <p id="pMsg" class="msg" style="display:none"></p>
   </div>
-  <button id="restartBtn" type="button" class="hide">התחל מחדש</button>
-  <div id="hint" class="hint"></div>
+  <p id="rotateHint">נוח יותר בסיבוב לרוחב</p>
 </div>
 
 <script>
@@ -98,6 +191,24 @@ window.onload = function () {
   var hint = document.getElementById("hint");
   var restartBtn = document.getElementById("restartBtn");
   var loriBubble = document.getElementById("loriBubble");
+  var fitEl = document.getElementById("fit");
+  var stageEl = document.getElementById("stage");
+
+  function fitGame() {
+    var pad = 12;
+    var portrait = window.innerHeight > window.innerWidth;
+    var extra = (portrait && window.innerWidth <= 900) ? 210 : 0;
+    var vw = window.innerWidth - pad * 2;
+    var vh = window.innerHeight - pad * 2 - extra;
+    var scale = Math.min(vw / W, vh / H, 1);
+    if (scale < 0.2) scale = 0.2;
+    fitEl.style.width = (W * scale) + "px";
+    fitEl.style.height = (H * scale) + "px";
+    stageEl.style.transform = "scale(" + scale + ")";
+  }
+  window.addEventListener("resize", fitGame);
+  window.addEventListener("orientationchange", function () { setTimeout(fitGame, 200); });
+  fitGame();
 
   var scene = "out";
   var andyOk = false, andyArms = false, andyOnFloor = true;
@@ -742,7 +853,7 @@ window.onload = function () {
     say("לחץ על דלת הבית כדי להיכנס");
   }
 
-  canvas.onclick = function (ev) {
+  function tryEnter(ev) {
     if (scene !== "out") return;
     unlockAudio();
     var r = canvas.getBoundingClientRect();
@@ -753,7 +864,15 @@ window.onload = function () {
       momVisible = true; lastActorKey = "";
       setTimeout(startDilemma, 1000);
     }
-  };
+  }
+  canvas.addEventListener("click", tryEnter);
+  canvas.addEventListener("touchstart", function (ev) {
+    unlockAudio();
+    if (!ev.changedTouches || !ev.changedTouches[0]) return;
+    var t = ev.changedTouches[0];
+    tryEnter({ clientX: t.clientX, clientY: t.clientY });
+  }, { passive: true });
+  document.addEventListener("touchstart", unlockAudio, { once: true, passive: true });
   restartBtn.onclick = resetAll;
 
   say("לחץ על דלת הבית כדי להיכנס");
